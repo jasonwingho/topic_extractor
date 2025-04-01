@@ -1,0 +1,122 @@
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.ParserConfigurationException;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.w3c.dom.Node;
+import org.w3c.dom.Element;
+import org.xml.sax.SAXException;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class TopicExtractor {
+
+    public static void main(String[] args) {
+        try {
+            // Create DocumentBuilder
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+
+            // Parse the XML file
+            // Note: Replace "topics.xml" with the actual path to your XML file
+            File xmlFile = new File("topics.xml");
+            Document doc = builder.parse(xmlFile);
+            doc.getDocumentElement().normalize();
+
+            System.out.println("Extracting Topics from XML...\n");
+
+            // Process TopicDefinitions
+            processTopicDefinitions(doc);
+
+            // Process ViewDefinitions
+            processViewDefinitions(doc);
+
+            // Process ReplicaDefinitions
+            processReplicaDefinitions(doc);
+
+        } catch (ParserConfigurationException | SAXException | IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void processTopicDefinitions(Document doc) {
+        NodeList topicDefList = doc.getElementsByTagName("TopicDefinition");
+        System.out.println("Topics from TopicDefinition:");
+        
+        for (int i = 0; i < topicDefList.getLength(); i++) {
+            Node node = topicDefList.item(i);
+            
+            if (node.getNodeType() == Node.ELEMENT_NODE) {
+                Element element = (Element) node;
+                String topic = getElementValue(element, "Topic");
+                System.out.println(" - " + topic);
+            }
+        }
+        System.out.println();
+    }
+
+    private static void processViewDefinitions(Document doc) {
+        NodeList viewDefList = doc.getElementsByTagName("ViewDefinition");
+        System.out.println("Topics from ViewDefinition:");
+        
+        for (int i = 0; i < viewDefList.getLength(); i++) {
+            Node node = viewDefList.item(i);
+            
+            if (node.getNodeType() == Node.ELEMENT_NODE) {
+                Element element = (Element) node;
+                String topic = getElementValue(element, "Topic");
+                String underlyingTopic = getElementValue(element, "UnderlyingTopic");
+                
+                // Extract grouping fields
+                NodeList groupingList = element.getElementsByTagName("Grouping");
+                List<String> groupingFields = new ArrayList<>();
+                
+                if (groupingList.getLength() > 0) {
+                    Element groupingElement = (Element) groupingList.item(0);
+                    NodeList fieldList = groupingElement.getElementsByTagName("Field");
+                    
+                    for (int j = 0; j < fieldList.getLength(); j++) {
+                        Element fieldElement = (Element) fieldList.item(j);
+                        groupingFields.add(fieldElement.getTextContent());
+                    }
+                }
+                
+                System.out.println(" - This is a view: " + topic);
+                System.out.println("   Underlying topic: " + underlyingTopic);
+                System.out.println("   Grouping by: " + String.join(", ", groupingFields));
+            }
+        }
+        System.out.println();
+    }
+
+    private static void processReplicaDefinitions(Document doc) {
+        NodeList replicaDefList = doc.getElementsByTagName("ReplicaDefinition");
+        System.out.println("Topics from ReplicaDefinition:");
+        
+        for (int i = 0; i < replicaDefList.getLength(); i++) {
+            Node node = replicaDefList.item(i);
+            
+            if (node.getNodeType() == Node.ELEMENT_NODE) {
+                Element element = (Element) node;
+                String topic = getElementValue(element, "Topic");
+                String underlyingTopic = getElementValue(element, "UnderlyingTopic");
+                String filter = getElementValue(element, "Filter");
+                
+                System.out.println(" - This is a replica: " + topic);
+                System.out.println("   Underlying topic: " + underlyingTopic);
+                System.out.println("   Filter: " + filter);
+            }
+        }
+        System.out.println();
+    }
+
+    private static String getElementValue(Element parent, String tagName) {
+        NodeList nodeList = parent.getElementsByTagName(tagName);
+        if (nodeList.getLength() > 0) {
+            return nodeList.item(0).getTextContent();
+        }
+        return "";
+    }
+}
