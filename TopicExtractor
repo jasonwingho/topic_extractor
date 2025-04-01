@@ -8,25 +8,30 @@ import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 import org.xml.sax.InputSource;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class TopicExtractor {
 
     public static void main(String[] args) {
         // Check if the file path was provided as a command-line argument
         String filePath = "topics.xml"; // Default path
+        String outputCsvPath = "topics_output.csv"; // Default output path
         
         if (args.length > 0) {
             filePath = args[0];
         }
         
+        if (args.length > 1) {
+            outputCsvPath = args[1];
+        }
+        
         System.out.println("Reading XML from: " + filePath);
+        System.out.println("Writing CSV to: " + outputCsvPath);
         
         try {
             // Read the XML file as a String
@@ -50,16 +55,27 @@ public class TopicExtractor {
             Document doc = builder.parse(is);
             doc.getDocumentElement().normalize();
 
-            System.out.println("Extracting Topics from XML...\n");
+            // Create a CSV file
+            try (FileWriter csvWriter = new FileWriter(outputCsvPath)) {
+                // Write CSV header
+                csvWriter.append("Topic Type,Topic Name,Underlying Topic,Grouping/Filter,Additional Info\n");
+                
+                // Process and write topic definitions
+                processTopicDefinitionsToCSV(doc, csvWriter);
+                
+                // Process and write view definitions
+                processViewDefinitionsToCSV(doc, csvWriter);
+                
+                // Process and write replica definitions
+                processReplicaDefinitionsToCSV(doc, csvWriter);
+                
+                csvWriter.flush();
+                System.out.println("CSV file created successfully at: " + outputCsvPath);
+            }
 
-            // Process TopicDefinitions
-            processTopicDefinitions(doc);
-
-            // Process ViewDefinitions
-            processViewDefinitions(doc);
-
-            // Process ReplicaDefinitions
-            processReplicaDefinitions(doc);
+            // Also display in console for verification
+            System.out.println("\nExtracted Topics Summary:");
+            displayTopicSummary(doc);
 
         } catch (ParserConfigurationException | SAXException | IOException e) {
             System.err.println("Error processing XML: " + e.getMessage());
@@ -67,9 +83,8 @@ public class TopicExtractor {
         }
     }
 
-    private static void processTopicDefinitions(Document doc) {
+    private static void processTopicDefinitionsToCSV(Document doc, FileWriter csvWriter) throws IOException {
         NodeList topicDefList = doc.getElementsByTagName("TopicDefinition");
-        System.out.println("Topics from TopicDefinition:");
         
         for (int i = 0; i < topicDefList.getLength(); i++) {
             Node node = topicDefList.item(i);
@@ -77,15 +92,21 @@ public class TopicExtractor {
             if (node.getNodeType() == Node.ELEMENT_NODE) {
                 Element element = (Element) node;
                 String topic = getElementValue(element, "Topic");
-                System.out.println(" - " + topic);
+                String messageType = getElementValue(element, "MessageType");
+                
+                // Format: TopicDefinition,TopicName,,,MessageType
+                csvWriter.append("TopicDefinition,")
+                        .append(escapeCSV(topic)).append(",")
+                        .append(",")  // Empty column for Underlying Topic
+                        .append(",")  // Empty column for Grouping/Filter
+                        .append(escapeCSV(messageType))
+                        .append("\n");
             }
         }
-        System.out.println();
     }
 
-    private static void processViewDefinitions(Document doc) {
+    private static void processViewDefinitionsToCSV(Document doc, FileWriter csvWriter) throws IOException {
         NodeList viewDefList = doc.getElementsByTagName("ViewDefinition");
-        System.out.println("Topics from ViewDefinition:");
         
         for (int i = 0; i < viewDefList.getLength(); i++) {
             Node node = viewDefList.item(i);
@@ -109,17 +130,20 @@ public class TopicExtractor {
                     }
                 }
                 
-                System.out.println(" - This is a view: " + topic);
-                System.out.println("   Underlying topic: " + underlyingTopic);
-                System.out.println("   Grouping by: " + String.join(", ", groupingFields));
+                String groupingStr = String.join(", ", groupingFields);
+                
+                // Format: ViewDefinition,TopicName,UnderlyingTopic,GroupingFields,
+                csvWriter.append("ViewDefinition,")
+                        .append(escapeCSV(topic)).append(",")
+                        .append(escapeCSV(underlyingTopic)).append(",")
+                        .append(escapeCSV(groupingStr)).append(",")
+                        .append("\n");
             }
         }
-        System.out.println();
     }
 
-    private static void processReplicaDefinitions(Document doc) {
+    private static void processReplicaDefinitionsToCSV(Document doc, FileWriter csvWriter) throws IOException {
         NodeList replicaDefList = doc.getElementsByTagName("ReplicaDefinition");
-        System.out.println("Topics from ReplicaDefinition:");
         
         for (int i = 0; i < replicaDefList.getLength(); i++) {
             Node node = replicaDefList.item(i);
@@ -129,13 +153,48 @@ public class TopicExtractor {
                 String topic = getElementValue(element, "Topic");
                 String underlyingTopic = getElementValue(element, "UnderlyingTopic");
                 String filter = getElementValue(element, "Filter");
+                String interval = getElementValue(element, "Interval");
                 
-                System.out.println(" - This is a replica: " + topic);
-                System.out.println("   Underlying topic: " + underlyingTopic);
-                System.out.println("   Filter: " + filter);
+                // Format: ReplicaDefinition,TopicName,UnderlyingTopic,Filter,Interval
+                csvWriter.append("ReplicaDefinition,")
+                        .append(escapeCSV(topic)).append(",")
+                        .append(escapeCSV(underlyingTopic)).append(",")
+                        .append(escapeCSV(filter)).append(",")
+                        .append(escapeCSV(interval))
+                        .append("\n");
             }
         }
-        System.out.println();
+    }
+    
+    private static void displayTopicSummary(Document doc) {
+        // Display topic definitions
+        NodeList topicDefList = doc.getElementsByTagName("TopicDefinition");
+        System.out.println("\nTopic Definitions (" + topicDefList.getLength() + "):");
+        for (int i = 0; i < topicDefList.getLength(); i++) {
+            Element element = (Element) topicDefList.item(i);
+            String topic = getElementValue(element, "Topic");
+            System.out.println(" - " + topic);
+        }
+        
+        // Display view definitions
+        NodeList viewDefList = doc.getElementsByTagName("ViewDefinition");
+        System.out.println("\nView Definitions (" + viewDefList.getLength() + "):");
+        for (int i = 0; i < viewDefList.getLength(); i++) {
+            Element element = (Element) viewDefList.item(i);
+            String topic = getElementValue(element, "Topic");
+            String underlyingTopic = getElementValue(element, "UnderlyingTopic");
+            System.out.println(" - " + topic + " (from " + underlyingTopic + ")");
+        }
+        
+        // Display replica definitions
+        NodeList replicaDefList = doc.getElementsByTagName("ReplicaDefinition");
+        System.out.println("\nReplica Definitions (" + replicaDefList.getLength() + "):");
+        for (int i = 0; i < replicaDefList.getLength(); i++) {
+            Element element = (Element) replicaDefList.item(i);
+            String topic = getElementValue(element, "Topic");
+            String underlyingTopic = getElementValue(element, "UnderlyingTopic");
+            System.out.println(" - " + topic + " (from " + underlyingTopic + ")");
+        }
     }
 
     private static String getElementValue(Element parent, String tagName) {
@@ -144,5 +203,18 @@ public class TopicExtractor {
             return nodeList.item(0).getTextContent();
         }
         return "";
+    }
+    
+    // Helper method to escape values for CSV format
+    private static String escapeCSV(String value) {
+        if (value == null) {
+            return "";
+        }
+        
+        // If the value contains quotes, comma, or newline, wrap in quotes and double any quotes
+        if (value.contains("\"") || value.contains(",") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }
